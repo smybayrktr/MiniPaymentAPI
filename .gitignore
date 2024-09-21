@@ -1,0 +1,201 @@
+# ============================
+# .NET Core & .NET Framework
+# ============================
+
+# Build Folders
+bin/
+obj/
+out/
+
+# NuGet Packages
+# Uncomment if you do not want to check in your packages
+# **/packages/*
+# !**/packages/build/
+# !**/packages/repositories.config
+
+# NuGet Cache
+.nuget/
+
+# Build Results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+# Uncomment if you have tasks that create the project's static files in wwwroot
+#wwwroot/
+
+# MSTest test Results
+*.trx
+*.coverage
+*.coveragexml
+
+# NUNIT
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+# Build Results of an ATL Project
+[Dd]ebugPS/
+[Rr]eleasePS/
+dlldata.c
+
+# BenchmarkDotNet Artifacts
+BenchmarkDotNet.Artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*_i.asm
+*_p.asm
+*.cache
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# DotCover
+.idea/
+.idea/
+.idea/*
+
+# Rider
+.idea/
+.idea/**
+
+# JetBrains Rider
+# User-specific files
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+
+# Rider caches
+.idea/**/caches/
+.idea/**/index/
+
+# Rider local history
+.idea/**/localHistory/
+
+# External tool configurations
+.idea/**/externalTools.xml
+
+# JetBrains IDEs
+*.sln.iml
+*.sln.ide
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# MonoDevelop
+*.userprefs
+
+# OS-specific files
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Others
+*.pidb
+*.svclog
+*.scc
+
+# Backup & report files from converting an old project file
+# to a newer Visual Studio version. Backup files are not needed,
+# because we have git to track the history.
+*_UpgradeReport_Files/
+Backup*/
+UpgradeLog*.XML
+UpgradeLog*.htm
+
+# Others
+*.tmp
+*.temp
+*.tmp_proj
+*.bak
+*.backup
+*.BLOB
+
+# Rider specific
+.idea/
+.idea/*
+
+# ASP.NET temporary files
+.\_ReSharper*/
+.\_ReSharper.Caches/
+
+# Ignore JetBrains Rider's temporary files
+.idea/
+*.sln.iml

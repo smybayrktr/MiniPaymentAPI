@@ -1,0 +1,70 @@
+services:
+  paymentservice-db:
+    image: postgres:14
+    container_name: paymentservice-db
+    environment:
+      POSTGRES_USER: paymentuser
+      POSTGRES_PASSWORD: paymentpassword
+      POSTGRES_DB: PaymentDB
+    ports:
+      - "5433:5432"
+    volumes:
+      - paymentservice-data:/var/lib/postgresql/data
+    networks:
+      - minipaynet
+
+  paymentservice:
+    build:
+      context: .
+      dockerfile: /Payment/Payment.API/Dockerfile
+    container_name: paymentservice
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__PaymentDB=Host=paymentservice-db;Port=5432;Database=PaymentServiceDb;Username=paymentuser;Password=paymentpassword
+    ports:
+      - "5001:80"
+    depends_on:
+      - paymentservice-db
+    networks:
+      - minipaynet
+
+  reportservice:
+    build:
+      context: .
+      dockerfile: /Report/Report.API/Dockerfile
+    container_name: reportservice
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - PaymentService__BaseUrl=http://paymentservice:80/api/payment
+    ports:
+      - "5002:80"
+    depends_on:
+      - paymentservice
+    networks:
+      - minipaynet
+
+  apigateway:
+    build:
+      context: .
+      dockerfile: /APIGateway/APIGateway/Dockerfile
+    container_name: apigateway
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Ocelot__BaseUrl=http://localhost:5000
+    ports:
+      - "5000:80"
+    depends_on:
+      - paymentservice
+      - reportservice
+    networks:
+      - minipaynet
+
+networks:
+  minipaynet:
+    driver: bridge
+
+volumes:
+  paymentservice-data:
