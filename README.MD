@@ -111,23 +111,23 @@ robustness.
 
 ### API Gateway
 
-**Base URL:** `/api`
+**Base URL:** `/`
 
 #### Endpoints
 
 1. **Payment API Routes**
 
-    - **Path:** `/api/payment/*`
+    - **Path:** `/payment/*`
     - **Description:** Routes to the **Payment API**.
     - **Example:**
-        - `POST /api/payment/pay` → **Payment API**
+        - `POST /payment/pay` → **Payment API**
 
 2. **Report API Routes**
 
-    - **Path:** `/api/report/*`
+    - **Path:** `/report/*`
     - **Description:** Routes to the **Report API**.
     - **Example:**
-        - `GET /api/report` → **Report API**
+        - `GET /report` → **Report API**
 
 ## Getting Started
 
