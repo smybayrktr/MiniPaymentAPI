@@ -7,6 +7,7 @@ using System.Reflection;
 using FluentValidation;
 using Payment.Application.Mapping;
 using MediatR;
+using Microsoft.OpenApi.Models;
 using Payment.API.Middlewares;
 using Payment.Contracts.Commands;
 using Payment.Domain.Entities;
@@ -69,7 +70,15 @@ builder.Services.AddScoped<ITimeZoneService, TimeZoneService>();
 
 // Configure Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Payment API",
+        Version = "v1",
+        Description = "#### Endpoints\n\n1. **Process Payment**\n\n    - **URL:** `POST /api/payment/pay`\n    - **Description:** Processes a new payment transaction.\n    - **Request Body:**\n        ```json\n        {\n            \"bankId\": \"Akbank\",\n            \"totalAmount\": 1000.00,\n            \"orderReference\": \"ORDER_001\"\n        }\n        ```\n    - **Responses:**\n        - `200 OK`: Returns the created transaction.\n        - `400 Bad Request`: If the request parameters are invalid.\n        - `500 Internal Server Error`: If an error occurs during processing.\n\n2. **Cancel Transaction**\n\n    - **URL:** `POST /api/payment/cancel/{transactionId}`\n    - **Description:** Cancels an existing transaction.\n    - **Parameters:**\n        - `transactionId` (Guid): The ID of the transaction to cancel.\n    - **Responses:**\n        - `200 OK`: Returns the updated transaction.\n        - `400 Bad Request`: If the transaction cannot be canceled (e.g., different day).\n        - `500 Internal Server Error`: If an error occurs during processing.\n\n3. **Refund Transaction**\n\n    - **URL:** `POST /api/payment/refund/{transactionId}`\n    - **Description:** Refunds an existing transaction.\n    - **Parameters:**\n        - `transactionId` (Guid): The ID of the transaction to refund.\n    - **Responses:**\n        - `200 OK`: Returns the updated transaction.\n        - `400 Bad Request`: If the refund is not allowed (e.g., within one day).\n        - `500 Internal Server Error`: If an error occurs during processing.\n"
+    });
+});
 
 builder.Services.AddCors(options =>
 {
@@ -93,7 +102,10 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment API v1");
+    });
 }
 
 app.UseCors("AllowAll");

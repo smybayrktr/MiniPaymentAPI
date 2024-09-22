@@ -72,7 +72,6 @@ robustness.
         - `transactionId` (Guid): The ID of the transaction to cancel.
     - **Responses:**
         - `200 OK`: Returns the updated transaction.
-        - `404 Not Found`: If the transaction does not exist.
         - `400 Bad Request`: If the transaction cannot be canceled (e.g., different day).
         - `500 Internal Server Error`: If an error occurs during processing.
 
@@ -84,7 +83,6 @@ robustness.
         - `transactionId` (Guid): The ID of the transaction to refund.
     - **Responses:**
         - `200 OK`: Returns the updated transaction.
-        - `404 Not Found`: If the transaction does not exist.
         - `400 Bad Request`: If the refund is not allowed (e.g., within one day).
         - `500 Internal Server Error`: If an error occurs during processing.
 

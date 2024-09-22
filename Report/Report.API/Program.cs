@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentValidation;
 using MediatR;
+using Microsoft.OpenApi.Models;
 using Report.API.Middlewares;
 using Report.Application.Handlers;
 using Report.Application.Interfaces;
@@ -45,7 +46,15 @@ builder.Services.AddScoped<IReportService, ReportService>();
 
 // Configure Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Report API",
+        Version = "v1",
+        Description = "#### Endpoints\n\n1. **Get Transactions Report**\n\n    - **URL:** `GET /api/report`\n    - **Description:** Retrieves a report of transactions based on provided search criteria.\n    - **Query Parameters:**\n        - `bankId` (string, optional): Filter by bank ID.\n        - `status` (string, optional): Filter by transaction status (`Success`, `Fail`).\n        - `orderReference` (string, optional): Filter by order reference.\n        - `startDate` (DateTime, optional): Start date for the report.\n        - `endDate` (DateTime, optional): End date for the report.\n    - **Responses:**\n        - `200 OK`: Returns a list of transactions matching the criteria.\n        - `400 Bad Request`: If the request parameters are invalid.\n        - `500 Internal Server Error`: If an error occurs while generating the report.",
+    });
+});
 
 builder.Services.AddCors(options =>
 {
@@ -62,7 +71,10 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Payment API v1");
+    });
 }
 
 app.UseCors("AllowAll");
