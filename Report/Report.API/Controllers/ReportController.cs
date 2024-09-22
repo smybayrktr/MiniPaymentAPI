@@ -1,8 +1,8 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using AutoMapper;
-using Report.Domain.Entities;
 using Report.Contracts.DTOs;
+using Report.Contracts.Queries;
 
 namespace Report.API.Controllers;
 
@@ -28,26 +28,15 @@ public class ReportController : ControllerBase
     /// <response code="400">If the request parameters are invalid or missing.</response>
     /// <response code="500">If an internal server error occurs while generating the report.</response>
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<Transaction>), 200)]
+    [ProducesResponseType(typeof(IEnumerable<TransactionReportDto>), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(500)]
     public async Task<IActionResult> GetReport([FromQuery] GetReportDto request)
     {
-        if (request == null)
-        {
-            return BadRequest("Report request parameters are required.");
-        }
+        var query = _mapper.Map<GetReportQuery>(request);
 
-        var query = _mapper.Map<Contracts.Queries.GetReportQuery>(request);
-
-        try
-        {
-            var report = await _mediator.Send(query);
-            return Ok(report);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"An error occurred while generating the report: {ex.Message}");
-        }
+        var report = await _mediator.Send(query);
+        
+        return Ok(report);
     }
 }

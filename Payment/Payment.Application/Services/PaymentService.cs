@@ -1,4 +1,5 @@
-﻿using Payment.Application.Interfaces;
+﻿using Payment.Application.Exceptions;
+using Payment.Application.Interfaces;
 using Payment.Contracts.Commands;
 using Payment.Domain.Entities;
 using Payment.Infrastructure.Repositories;
@@ -26,19 +27,19 @@ public class PaymentService : IPaymentService
     {
         var transaction = await _transactionRepository.GetByIdAsync(command.TransactionId);
         if (transaction == null)
-            throw new Exception("Transaction not found");
+            throw new TransactionNotFoundException("Transaction not found");
 
         var bankService = _bankFactory.GetBankService(transaction.BankId);
-        return await bankService.CancelAsync(command.TransactionId);
+        return await bankService.CancelAsync(transaction);
     }
 
     public async Task<Transaction> RefundAsync(RefundTransactionCommand command)
     {
         var transaction = await _transactionRepository.GetByIdAsync(command.TransactionId);
         if (transaction == null)
-            throw new Exception("Transaction not found");
+            throw new TransactionNotFoundException("Transaction not found");
 
         var bankService = _bankFactory.GetBankService(transaction.BankId);
-        return await bankService.RefundAsync(command.TransactionId);
+        return await bankService.RefundAsync(transaction);
     }
 }

@@ -1,4 +1,5 @@
-﻿using Payment.Application.Interfaces;
+﻿using Payment.Application.Exceptions;
+using Payment.Application.Interfaces;
 
 namespace Payment.Application.Services;
 
@@ -20,12 +21,13 @@ public class BankFactory : IBankFactory
 
     public IBankService GetBankService(string bankId)
     {
-        return bankId switch
+        return bankId.ToLower().Trim() switch
         {
-            "Akbank" => _akbankService,
-            "Garanti" => _garantiService,
-            "YapiKredi" => _yapiKrediService,
-            _ => throw new ArgumentException("Invalid Bank Id"),
+            "akbank" => _akbankService,
+            "garanti" => _garantiService,
+            "yapikredi" => _yapiKrediService,
+            "yapıkredi" => _yapiKrediService,
+            _ => throw new BankNotFoundException("Invalid Bank Id"),
         };
     }
 }

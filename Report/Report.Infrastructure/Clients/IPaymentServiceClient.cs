@@ -1,9 +1,9 @@
-﻿using Report.Contracts.Queries;
-using Report.Domain.Entities;
+﻿using Report.Contracts.DTOs;
+using Report.Contracts.Queries;
 
 namespace Report.Infrastructure.Clients;
 
 public interface IPaymentServiceClient
 {
-    Task<IEnumerable<Transaction>> SearchTransactionsAsync(GetReportQuery query);
+    Task<IEnumerable<TransactionReportDto>> SearchTransactionsAsync(GetReportQuery query);
 }

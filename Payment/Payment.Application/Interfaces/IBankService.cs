@@ -6,6 +6,6 @@ namespace Payment.Application.Interfaces;
 public interface IBankService
 {
     Task<Transaction> PayAsync(PayTransactionCommand command);
-    Task<Transaction> CancelAsync(Guid transactionId);
-    Task<Transaction> RefundAsync(Guid transactionId);
+    Task<Transaction> CancelAsync(Transaction transaction);
+    Task<Transaction> RefundAsync(Transaction transaction);
 }

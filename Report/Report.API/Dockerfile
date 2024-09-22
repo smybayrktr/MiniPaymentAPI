@@ -9,7 +9,6 @@ COPY ./MiniPaymentAPI.sln ./
 COPY ./Report/Report.API/Report.API.csproj ./Report/Report.API/
 COPY ./Report/Report.Application/Report.Application.csproj ./Report/Report.Application/
 COPY ./Report/Report.Contracts/Report.Contracts.csproj ./Report/Report.Contracts/
-COPY ./Report/Report.Domain/Report.Domain.csproj ./Report/Report.Domain/
 COPY ./Report/Report.Infrastructure/Report.Infrastructure.csproj ./Report/Report.Infrastructure/
 
 # Restore dependencies
@@ -19,7 +18,6 @@ RUN dotnet restore "./Report/Report.API/Report.API.csproj"
 COPY ./Report/Report.API/. ./Report/Report.API/
 COPY ./Report/Report.Application/. ./Report/Report.Application/
 COPY ./Report/Report.Contracts/. ./Report/Report.Contracts/
-COPY ./Report/Report.Domain/. ./Report/Report.Domain/
 COPY ./Report/Report.Infrastructure/. ./Report/Report.Infrastructure/
 
 # Build and publish the application

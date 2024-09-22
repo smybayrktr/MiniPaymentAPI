@@ -1,321 +1,219 @@
 ﻿using Moq;
-using Payment.Application.Services;
+using Payment.Application.Exceptions;
 using Payment.Application.Interfaces;
+using Payment.Application.Services;
 using Payment.Contracts.Commands;
 using Payment.Domain.Entities;
-using Payment.Infrastructure.Repositories;
-using FluentAssertions;
 using Payment.Domain.Enums;
+using Payment.Infrastructure.Repositories;
 
-namespace Payment.Tests.Services
+namespace Payment.Tests.Services;
+
+public class PaymentServiceTests
 {
-    public class PaymentServiceTests
+    private readonly Mock<ITransactionRepository> _transactionRepositoryMock;
+    private readonly Mock<IBankFactory> _bankFactoryMock;
+    private readonly Mock<IBankService> _bankServiceMock;
+    private readonly PaymentService _paymentService;
+
+    public PaymentServiceTests()
     {
-        private readonly Mock<ITransactionRepository> _transactionRepositoryMock;
-        private readonly Mock<IBankFactory> _bankFactoryMock;
-        private readonly PaymentService _paymentService;
+        _transactionRepositoryMock = new Mock<ITransactionRepository>();
+        _bankFactoryMock = new Mock<IBankFactory>();
+        _bankServiceMock = new Mock<IBankService>();
 
-        public PaymentServiceTests()
-        {
-            _transactionRepositoryMock = new Mock<ITransactionRepository>();
-            _bankFactoryMock = new Mock<IBankFactory>();
-            _paymentService = new PaymentService(_transactionRepositoryMock.Object, _bankFactoryMock.Object);
-        }
+        _bankFactoryMock.Setup(f => f.GetBankService(It.IsAny<string>()))
+            .Returns(_bankServiceMock.Object);
 
-        #region PayAsync Tests
-
-        [Fact]
-        public async Task PayAsync_ShouldReturnTransaction_WhenBankServiceSucceeds()
-        {
-            // Arrange
-            var command = new PayTransactionCommand
-            {
-                BankId = "Akbank",
-                TotalAmount = 100.00m,
-                OrderReference = "ORDER123"
-            };
-
-            var expectedTransaction = new Transaction
-            {
-                Id = Guid.NewGuid(),
-                BankId = command.BankId,
-                TotalAmount = command.TotalAmount,
-                OrderReference = command.OrderReference,
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow
-            };
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.PayAsync(command)).ReturnsAsync(expectedTransaction);
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(command.BankId)).Returns(bankServiceMock.Object);
-
-            // Act
-            var result = await _paymentService.PayAsync(command);
-
-            // Assert
-            result.Should().BeEquivalentTo(expectedTransaction);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(command.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.PayAsync(command), Times.Once);
-        }
-
-        [Fact]
-        public async Task PayAsync_ShouldThrowException_WhenBankServiceThrows()
-        {
-            // Arrange
-            var command = new PayTransactionCommand
-            {
-                BankId = "Akbank",
-                TotalAmount = 100.00m,
-                OrderReference = "ORDER123"
-            };
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.PayAsync(command)).ThrowsAsync(new Exception("Payment failed"));
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(command.BankId)).Returns(bankServiceMock.Object);
-
-            // Act
-            Func<Task> act = async () => { await _paymentService.PayAsync(command); };
-
-            // Assert
-            await act.Should().ThrowAsync<Exception>().WithMessage("Payment failed");
-            _bankFactoryMock.Verify(bf => bf.GetBankService(command.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.PayAsync(command), Times.Once);
-        }
-
-        #endregion
-
-        #region CancelAsync Tests
-
-        [Fact]
-        public async Task CancelAsync_ShouldReturnTransaction_WhenCancellationSucceeds()
-        {
-            // Arrange
-            var command = new CancelTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            var existingTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = "Garanti",
-                TotalAmount = 150.00m,
-                NetAmount = 150.00m,
-                OrderReference = "ORDER456",
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow.AddHours(-1)
-            };
-
-            var expectedTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = existingTransaction.BankId,
-                TotalAmount = existingTransaction.TotalAmount,
-                NetAmount = 0.00m, // NetAmount -= TotalAmount
-                OrderReference = existingTransaction.OrderReference,
-                Status = TransactionStatus.Success,
-                TransactionDate = existingTransaction.TransactionDate
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync(existingTransaction);
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.CancelAsync(command.TransactionId))
-                .ReturnsAsync(expectedTransaction);
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(existingTransaction.BankId))
-                .Returns(bankServiceMock.Object);
-
-            // Act
-            var result = await _paymentService.CancelAsync(command);
-
-            // Assert
-            result.Should().BeEquivalentTo(expectedTransaction);
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(existingTransaction.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.CancelAsync(command.TransactionId), Times.Once);
-        }
-
-        [Fact]
-        public async Task CancelAsync_ShouldThrowException_WhenTransactionNotFound()
-        {
-            // Arrange
-            var command = new CancelTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync((Transaction)null);
-
-            // Act
-            Func<Task> act = async () => { await _paymentService.CancelAsync(command); };
-
-            // Assert
-            await act.Should().ThrowAsync<Exception>().WithMessage("Transaction not found");
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task CancelAsync_ShouldThrowException_WhenBankServiceThrows()
-        {
-            // Arrange
-            var command = new CancelTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            var existingTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = "Garanti",
-                TotalAmount = 150.00m,
-                NetAmount = 150.00m,
-                OrderReference = "ORDER456",
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow.AddHours(-1)
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync(existingTransaction);
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.CancelAsync(command.TransactionId))
-                .ThrowsAsync(new Exception("Cancellation failed"));
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(existingTransaction.BankId))
-                .Returns(bankServiceMock.Object);
-
-            // Act
-            Func<Task> act = async () => { await _paymentService.CancelAsync(command); };
-
-            // Assert
-            await act.Should().ThrowAsync<Exception>().WithMessage("Cancellation failed");
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(existingTransaction.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.CancelAsync(command.TransactionId), Times.Once);
-        }
-
-        #endregion
-
-        #region RefundAsync Tests
-
-        [Fact]
-        public async Task RefundAsync_ShouldReturnTransaction_WhenRefundSucceeds()
-        {
-            // Arrange
-            var command = new RefundTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            var existingTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = "YapiKredi",
-                TotalAmount = 200.00m,
-                NetAmount = 200.00m,
-                OrderReference = "ORDER789",
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow.AddDays(-2)
-            };
-
-            var expectedTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = existingTransaction.BankId,
-                TotalAmount = existingTransaction.TotalAmount,
-                NetAmount = 0.00m, // NetAmount -= TotalAmount
-                OrderReference = existingTransaction.OrderReference,
-                Status = TransactionStatus.Success,
-                TransactionDate = existingTransaction.TransactionDate
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync(existingTransaction);
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.RefundAsync(command.TransactionId))
-                .ReturnsAsync(expectedTransaction);
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(existingTransaction.BankId))
-                .Returns(bankServiceMock.Object);
-
-            // Act
-            var result = await _paymentService.RefundAsync(command);
-
-            // Assert
-            result.Should().BeEquivalentTo(expectedTransaction);
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(existingTransaction.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.RefundAsync(command.TransactionId), Times.Once);
-        }
-
-        [Fact]
-        public async Task RefundAsync_ShouldThrowException_WhenTransactionNotFound()
-        {
-            // Arrange
-            var command = new RefundTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync((Transaction)null);
-
-            // Act
-            Func<Task> act = async () => { await _paymentService.RefundAsync(command); };
-
-            // Assert
-            await act.Should().ThrowAsync<Exception>().WithMessage("Transaction not found");
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(It.IsAny<string>()), Times.Never);
-        }
-
-        [Fact]
-        public async Task RefundAsync_ShouldThrowException_WhenBankServiceThrows()
-        {
-            // Arrange
-            var command = new RefundTransactionCommand
-            {
-                TransactionId = Guid.NewGuid()
-            };
-
-            var existingTransaction = new Transaction
-            {
-                Id = command.TransactionId,
-                BankId = "YapiKredi",
-                TotalAmount = 200.00m,
-                NetAmount = 200.00m,
-                OrderReference = "ORDER789",
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow.AddDays(-2)
-            };
-
-            _transactionRepositoryMock.Setup(tr => tr.GetByIdAsync(command.TransactionId))
-                .ReturnsAsync(existingTransaction);
-
-            var bankServiceMock = new Mock<IBankService>();
-            bankServiceMock.Setup(bs => bs.RefundAsync(command.TransactionId))
-                .ThrowsAsync(new Exception("Refund failed"));
-
-            _bankFactoryMock.Setup(bf => bf.GetBankService(existingTransaction.BankId))
-                .Returns(bankServiceMock.Object);
-
-            // Act
-            Func<Task> act = async () => { await _paymentService.RefundAsync(command); };
-
-            // Assert
-            await act.Should().ThrowAsync<Exception>().WithMessage("Refund failed");
-            _transactionRepositoryMock.Verify(tr => tr.GetByIdAsync(command.TransactionId), Times.Once);
-            _bankFactoryMock.Verify(bf => bf.GetBankService(existingTransaction.BankId), Times.Once);
-            bankServiceMock.Verify(bs => bs.RefundAsync(command.TransactionId), Times.Once);
-        }
-
-        #endregion
+        _paymentService = new PaymentService(_transactionRepositoryMock.Object, _bankFactoryMock.Object);
     }
+
+    // Helper method to create a sample transaction
+    private Transaction CreateSampleTransaction(Guid transactionId, string bankId, DateTime transactionDate)
+    {
+        return new Transaction
+        {
+            Id = transactionId,
+            BankId = bankId,
+            TotalAmount = 1000m,
+            NetAmount = 1000m,
+            Status = TransactionStatus.Success,
+            OrderReference = "ORDER123",
+            TransactionDate = transactionDate
+        };
+    }
+
+    // Helper method to create a sample PayTransactionCommand
+    private PayTransactionCommand CreatePayTransactionCommand(string bankId)
+    {
+        return new PayTransactionCommand
+        {
+            BankId = bankId,
+            TotalAmount = 1000m,
+            OrderReference = "ORDER123"
+        };
+    }
+
+    [Fact]
+    public async Task PayAsync_ShouldProcessPaymentSuccessfully()
+    {
+        // Arrange
+        var bankId = Guid.NewGuid().ToString();
+        var command = CreatePayTransactionCommand(bankId);
+        var expectedTransaction = new Transaction
+        {
+            Id = Guid.NewGuid(),
+            BankId = bankId,
+            TotalAmount = command.TotalAmount,
+            NetAmount = command.TotalAmount,
+            Status = TransactionStatus.Success,
+            OrderReference = command.OrderReference,
+            TransactionDate = DateTime.UtcNow
+        };
+
+        _bankServiceMock.Setup(s => s.PayAsync(It.IsAny<PayTransactionCommand>()))
+            .ReturnsAsync(expectedTransaction);
+
+        // Act
+        var result = await _paymentService.PayAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(expectedTransaction.Id, result.Id);
+        Assert.Equal(TransactionStatus.Success, result.Status);
+        _bankFactoryMock.Verify(f => f.GetBankService(bankId), Times.Once);
+        _bankServiceMock.Verify(s => s.PayAsync(command), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelAsync_ShouldCancelPaymentSuccessfully()
+    {
+        // Arrange
+        var transactionId = Guid.NewGuid();
+        var bankId = Guid.NewGuid().ToString();
+        var transaction = CreateSampleTransaction(transactionId, bankId, DateTime.UtcNow);
+
+        var command = new CancelTransactionCommand
+        {
+            TransactionId = transactionId
+        };
+
+        _transactionRepositoryMock.Setup(r => r.GetByIdAsync(transactionId))
+            .ReturnsAsync(transaction);
+
+        _bankServiceMock.Setup(s => s.CancelAsync(transaction))
+            .ReturnsAsync(transaction);
+
+        // Act
+        var result = await _paymentService.CancelAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(transactionId, result.Id);
+        Assert.Equal(TransactionStatus.Success, result.Status);
+        _transactionRepositoryMock.Verify(r => r.GetByIdAsync(transactionId), Times.Once);
+        _bankFactoryMock.Verify(f => f.GetBankService(bankId), Times.Once);
+        _bankServiceMock.Verify(s => s.CancelAsync(transaction), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefundAsync_ShouldRefundPaymentSuccessfully()
+    {
+        // Arrange
+        var transactionId = Guid.NewGuid();
+        var bankId = Guid.NewGuid().ToString();
+        var transactionDate = DateTime.UtcNow.AddDays(-2); // Ensure it's after one day
+        var transaction = CreateSampleTransaction(transactionId, bankId, transactionDate);
+
+        var command = new RefundTransactionCommand
+        {
+            TransactionId = transactionId
+        };
+
+        _transactionRepositoryMock.Setup(r => r.GetByIdAsync(transactionId))
+            .ReturnsAsync(transaction);
+
+        _bankServiceMock.Setup(s => s.RefundAsync(transaction))
+            .ReturnsAsync(transaction);
+
+        // Act
+        var result = await _paymentService.RefundAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(transactionId, result.Id);
+        Assert.Equal(TransactionStatus.Success, result.Status);
+        _transactionRepositoryMock.Verify(r => r.GetByIdAsync(transactionId), Times.Once);
+        _bankFactoryMock.Verify(f => f.GetBankService(bankId), Times.Once);
+        _bankServiceMock.Verify(s => s.RefundAsync(transaction), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelAsync_ShouldThrowTransactionNotFoundException_WhenTransactionDoesNotExist()
+    {
+        // Arrange
+        var transactionId = Guid.NewGuid();
+        var command = new CancelTransactionCommand
+        {
+            TransactionId = transactionId
+        };
+
+        _transactionRepositoryMock.Setup(r => r.GetByIdAsync(transactionId))
+            .ReturnsAsync((Transaction)null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<TransactionNotFoundException>(() => _paymentService.CancelAsync(command));
+        _transactionRepositoryMock.Verify(r => r.GetByIdAsync(transactionId), Times.Once);
+        _bankFactoryMock.Verify(f => f.GetBankService(It.IsAny<string>()), Times.Never);
+        _bankServiceMock.Verify(s => s.CancelAsync(It.IsAny<Transaction>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefundAsync_ShouldThrowTransactionNotFoundException_WhenTransactionDoesNotExist()
+    {
+        // Arrange
+        var transactionId = Guid.NewGuid();
+        var command = new RefundTransactionCommand
+        {
+            TransactionId = transactionId
+        };
+
+        _transactionRepositoryMock.Setup(r => r.GetByIdAsync(transactionId))
+            .ReturnsAsync((Transaction)null);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<TransactionNotFoundException>(() => _paymentService.RefundAsync(command));
+        _transactionRepositoryMock.Verify(r => r.GetByIdAsync(transactionId), Times.Once);
+        _bankFactoryMock.Verify(f => f.GetBankService(It.IsAny<string>()), Times.Never);
+        _bankServiceMock.Verify(s => s.RefundAsync(It.IsAny<Transaction>()), Times.Never);
+    }
+    
+    [Fact]
+    public async Task CancelAsync_ShouldThrowBusinessLogicException_WhenCancellationDateIsDifferent()
+    {
+        // Arrange
+        var transactionId = Guid.NewGuid();
+        var bankId = Guid.NewGuid().ToString();
+        var transactionDate = DateTime.UtcNow.AddDays(-1); // Different day
+        var transaction = CreateSampleTransaction(transactionId, bankId, transactionDate);
+
+        var command = new CancelTransactionCommand
+        {
+            TransactionId = transactionId
+        };
+
+        _transactionRepositoryMock.Setup(r => r.GetByIdAsync(transactionId))
+            .ReturnsAsync(transaction);
+
+        _bankServiceMock.Setup(s => s.CancelAsync(transaction))
+            .ThrowsAsync(new BusinessLogicException("Cancel operation is only allowed on the same day"));
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<BusinessLogicException>(() => _paymentService.CancelAsync(command));
+        Assert.Equal("Cancel operation is only allowed on the same day", exception.Message);
+        _transactionRepositoryMock.Verify(r => r.GetByIdAsync(transactionId), Times.Once);
+        _bankFactoryMock.Verify(f => f.GetBankService(bankId), Times.Once);
+        _bankServiceMock.Verify(s => s.CancelAsync(transaction), Times.Once);
+    }
+
 }

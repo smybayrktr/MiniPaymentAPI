@@ -15,7 +15,8 @@ RUN dotnet restore "./APIGateway/APIGateway/APIGateway.csproj"
 COPY ./APIGateway/APIGateway/. ./APIGateway/APIGateway/
 
 # Copy ocelot.json configuration file
-COPY ./APIGateway/APIGateway/ocelot.json ./APIGateway/APIGateway/
+COPY ./APIGateway/APIGateway/ocelot.development.json ./APIGateway/APIGateway/
+COPY ./APIGateway/APIGateway/ocelot.production.json ./APIGateway/APIGateway/
 
 # Build and publish the application
 RUN dotnet publish "./APIGateway/APIGateway/APIGateway.csproj" -c Release -o /app/publish

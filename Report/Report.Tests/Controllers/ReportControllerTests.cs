@@ -1,13 +1,12 @@
-﻿using Moq;
+﻿using System.Transactions;
 using AutoMapper;
 using FluentAssertions;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Moq;
 using Report.API.Controllers;
-using Report.Contracts.Queries;
 using Report.Contracts.DTOs;
-using Report.Domain.Entities;
-using Report.Domain.Enums;
+using Report.Contracts.Queries;
 
 namespace Report.Tests.Controllers;
 
@@ -24,161 +23,168 @@ public class ReportControllerTests
         _controller = new ReportController(_mediatorMock.Object, _mapperMock.Object);
     }
 
-    [Fact]
-    public async Task GetReport_ShouldReturnOk_WithReportData_WhenRequestIsValid()
+    private IEnumerable<TransactionReportDto> CreateSampleTransactionReports()
     {
-        // Arrange
-        var requestDto = new GetReportDto
+        return new List<TransactionReportDto>
         {
-            BankId = "Akbank",
-            Status = TransactionStatus.Success,
-            OrderReference = "ORDER_001",
-            StartDate = DateTime.UtcNow.AddDays(-30),
-            EndDate = DateTime.UtcNow
-        };
-
-        var query = new GetReportQuery
-        {
-            BankId = requestDto.BankId,
-            Status = requestDto.Status,
-            OrderReference = requestDto.OrderReference,
-            StartDate = requestDto.StartDate,
-            EndDate = requestDto.EndDate
-        };
-
-        var expectedTransactions = new List<Transaction>
-        {
-            new Transaction
+            new TransactionReportDto
             {
-                Id = Guid.NewGuid(),
-                BankId = "Akbank",
-                TotalAmount = 1000m,
-                NetAmount = 900m,
-                Status = TransactionStatus.Success,
-                OrderReference = "ORDER_001",
-                TransactionDate = DateTime.UtcNow.AddDays(-10)
+                TransactionId = Guid.NewGuid(),
+                BankId = Guid.NewGuid().ToString(),
+                TotalAmount = 500m,
+                NetAmount = 500m,
+                Status = TransactionStatusDto.Success,
+                OrderReference = "ORDER123",
+                TransactionDate = DateTime.UtcNow
+            },
+            new TransactionReportDto
+            {
+                TransactionId = Guid.NewGuid(),
+                BankId = Guid.NewGuid().ToString(),
+                TotalAmount = 1500m,
+                NetAmount = 1500m,
+                Status = TransactionStatusDto.Success,
+                OrderReference = "ORDER456",
+                TransactionDate = DateTime.UtcNow
             }
         };
+    }
+
+    private GetReportQuery CreateSampleGetReportQuery(GetReportDto request)
+    {
+        return new GetReportQuery
+        {
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            Status = request.Status,
+            BankId = request.BankId
+        };
+    }
+    
+    [Fact]
+    public async Task GetReport_ShouldReturnOk_WithTransactionReports_WhenReportGenerationIsSuccessful()
+    {
+        // Arrange
+        var request = new GetReportDto
+        {
+            StartDate = DateTime.UtcNow.AddDays(-7),
+            EndDate = DateTime.UtcNow,
+            Status = TransactionStatusDto.Success,
+            BankId = Guid.NewGuid().ToString()
+        };
+
+        var query = CreateSampleGetReportQuery(request);
+
+        var reportData = CreateSampleTransactionReports();
 
         _mapperMock.Setup(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()))
             .Returns(query);
 
-        _mediatorMock.Setup(m => m.Send(query, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedTransactions);
+        _mediatorMock.Setup(m => m.Send(It.IsAny<GetReportQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(reportData);
 
         // Act
-        var result = await _controller.GetReport(requestDto);
+        var result = await _controller.GetReport(request);
 
         // Assert
         var okResult = result as OkObjectResult;
         okResult.Should().NotBeNull();
         okResult.StatusCode.Should().Be(200);
-        okResult.Value.Should().BeEquivalentTo(expectedTransactions);
+        okResult.Value.Should().BeEquivalentTo(reportData);
 
-        _mapperMock.Verify(m => m.Map<GetReportQuery>(requestDto), Times.Once);
+        _mapperMock.Verify(m => m.Map<GetReportQuery>(request), Times.Once);
         _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
     }
-
+    
     [Fact]
-    public async Task GetReport_ShouldReturnBadRequest_WhenRequestIsNull()
+    public async Task GetReport_ShouldReturnOk_WithEmptyList_WhenNoTransactionsMatchCriteria()
     {
         // Arrange
-        GetReportDto requestDto = null;
+        var request = new GetReportDto
+        {
+            StartDate = DateTime.UtcNow.AddDays(-7),
+            EndDate = DateTime.UtcNow,
+            Status = TransactionStatusDto.Success,
+            BankId = Guid.NewGuid().ToString()
+        };
+
+        var query = CreateSampleGetReportQuery(request);
+
+        var reportData = new List<TransactionReportDto>(); // Empty list
+
+        _mapperMock.Setup(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()))
+            .Returns(query);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<GetReportQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(reportData);
 
         // Act
-        var result = await _controller.GetReport(requestDto);
+        var result = await _controller.GetReport(request);
 
         // Assert
-        var badRequestResult = result as BadRequestObjectResult;
-        badRequestResult.Should().NotBeNull();
-        badRequestResult.StatusCode.Should().Be(400);
-        badRequestResult.Value.Should().Be("Report request parameters are required.");
+        var okResult = result as OkObjectResult;
+        okResult.Should().NotBeNull();
+        okResult.StatusCode.Should().Be(200);
+        okResult.Value.Should().BeEquivalentTo(reportData);
 
-        _mapperMock.Verify(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()), Times.Never);
+        _mapperMock.Verify(m => m.Map<GetReportQuery>(request), Times.Once);
+        _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
+    }
+    
+    [Fact]
+    public async Task GetReport_ShouldThrowException_WhenMappingFails()
+    {
+        // Arrange
+        var request = new GetReportDto
+        {
+            StartDate = DateTime.UtcNow.AddDays(-7),
+            EndDate = DateTime.UtcNow,
+            Status = TransactionStatusDto.Success,
+            BankId = Guid.NewGuid().ToString()
+        };
+
+        _mapperMock.Setup(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()))
+            .Throws(new AutoMapperMappingException("Mapping failed"));
+
+        // Act
+        Func<Task<IActionResult>> act = async () => await _controller.GetReport(request);
+
+        // Assert
+        await act.Should().ThrowAsync<AutoMapperMappingException>()
+            .WithMessage("Mapping failed");
+
+        _mapperMock.Verify(m => m.Map<GetReportQuery>(request), Times.Once);
         _mediatorMock.Verify(m => m.Send(It.IsAny<GetReportQuery>(), It.IsAny<CancellationToken>()), Times.Never);
     }
-
+    
     [Fact]
-    public async Task GetReport_ShouldReturnInternalServerError_WhenMediatorThrowsException()
+    public async Task GetReport_ShouldThrowException_WhenMediatorThrowsException()
     {
         // Arrange
-        var requestDto = new GetReportDto
+        var request = new GetReportDto
         {
-            BankId = "Garanti",
-            Status = TransactionStatus.Fail,
-            OrderReference = "ORDER_002",
-            StartDate = DateTime.UtcNow.AddDays(-15),
-            EndDate = DateTime.UtcNow
+            StartDate = DateTime.UtcNow.AddDays(-7),
+            EndDate = DateTime.UtcNow,
+            Status = TransactionStatusDto.Success,
+            BankId = Guid.NewGuid().ToString()
         };
 
-        var query = new GetReportQuery
-        {
-            BankId = requestDto.BankId,
-            Status = requestDto.Status,
-            OrderReference = requestDto.OrderReference,
-            StartDate = requestDto.StartDate,
-            EndDate = requestDto.EndDate
-        };
+        var query = CreateSampleGetReportQuery(request);
 
         _mapperMock.Setup(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()))
             .Returns(query);
 
-        _mediatorMock.Setup(m => m.Send(query, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Mediator Error"));
+        _mediatorMock.Setup(m => m.Send(It.IsAny<GetReportQuery>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Mediator error"));
 
         // Act
-        var result = await _controller.GetReport(requestDto);
+        Func<Task<IActionResult>> act = async () => await _controller.GetReport(request);
 
         // Assert
-        var objectResult = result as ObjectResult;
-        objectResult.Should().NotBeNull();
-        objectResult.StatusCode.Should().Be(500);
-        objectResult.Value.Should().Be("An error occurred while generating the report: Mediator Error");
+        await act.Should().ThrowAsync<Exception>()
+            .WithMessage("Mediator error");
 
-        _mapperMock.Verify(m => m.Map<GetReportQuery>(requestDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetReport_ShouldReturnOk_WithEmptyList_WhenNoTransactionsFound()
-    {
-        // Arrange
-        var requestDto = new GetReportDto
-        {
-            BankId = "YapiKredi",
-            Status = TransactionStatus.Success,
-            OrderReference = "ORDER_003",
-            StartDate = DateTime.UtcNow.AddDays(-20),
-            EndDate = DateTime.UtcNow
-        };
-
-        var query = new GetReportQuery
-        {
-            BankId = requestDto.BankId,
-            Status = requestDto.Status,
-            OrderReference = requestDto.OrderReference,
-            StartDate = requestDto.StartDate,
-            EndDate = requestDto.EndDate
-        };
-
-        var expectedTransactions = new List<Transaction>(); // Boş liste
-
-        _mapperMock.Setup(m => m.Map<GetReportQuery>(It.IsAny<GetReportDto>()))
-            .Returns(query);
-
-        _mediatorMock.Setup(m => m.Send(query, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedTransactions);
-
-        // Act
-        var result = await _controller.GetReport(requestDto);
-
-        // Assert
-        var okResult = result as OkObjectResult;
-        okResult.Should().NotBeNull();
-        okResult.StatusCode.Should().Be(200);
-        okResult.Value.Should().BeEquivalentTo(expectedTransactions);
-
-        _mapperMock.Verify(m => m.Map<GetReportQuery>(requestDto), Times.Once);
+        _mapperMock.Verify(m => m.Map<GetReportQuery>(request), Times.Once);
         _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

@@ -1,9 +1,9 @@
-﻿using Moq;
+﻿using System.Transactions;
+using Moq;
 using Report.Application.Services;
 using Report.Contracts.Queries;
-using Report.Domain.Entities;
 using FluentAssertions;
-using Report.Domain.Enums;
+using Report.Contracts.DTOs;
 using Report.Infrastructure.Clients;
 
 namespace Report.Tests.Services;
@@ -26,24 +26,25 @@ public class ReportServiceTests
         var query = new GetReportQuery
         {
             BankId = "YapiKredi",
-            Status = TransactionStatus.Success,
+            Status = TransactionStatusDto.Success,
             OrderReference = "ORDER_003",
             StartDate = DateTime.UtcNow.AddDays(-20),
             EndDate = DateTime.UtcNow
         };
 
-        var expectedTransactions = new List<Transaction>
+        var expectedTransactions = new List<TransactionReportDto>
         {
-            new Transaction
+            new TransactionReportDto
             {
-                Id = Guid.NewGuid(),
-                BankId = "YapiKredi",
-                TotalAmount = 1500m,
-                NetAmount = 1400m,
-                Status = TransactionStatus.Success,
-                OrderReference = "ORDER_003",
-                TransactionDate = DateTime.UtcNow.AddDays(-5)
-            }
+                TransactionId = Guid.NewGuid(),
+                TotalAmount = 100m,
+                NetAmount = 100m,
+                Status = TransactionStatusDto.Success,
+                TransactionDate = DateTime.UtcNow.AddDays(-5),
+                OrderReference = "dummy",
+                BankId = Guid.NewGuid().ToString(),
+                TransactionDetails = new List<TransactionDetailDto>(),
+            },
         };
 
         _paymentServiceClientMock.Setup(client => client.SearchTransactionsAsync(query))
@@ -67,13 +68,13 @@ public class ReportServiceTests
         var query = new GetReportQuery
         {
             BankId = "Akbank",
-            Status = TransactionStatus.Fail,
+            Status = TransactionStatusDto.Fail,
             OrderReference = "ORDER_004",
             StartDate = DateTime.UtcNow.AddDays(-10),
             EndDate = DateTime.UtcNow
         };
 
-        var expectedTransactions = new List<Transaction>();
+        var expectedTransactions = new List<TransactionReportDto>();
 
         _paymentServiceClientMock.Setup(client => client.SearchTransactionsAsync(query))
             .ReturnsAsync(expectedTransactions);
@@ -95,7 +96,7 @@ public class ReportServiceTests
         var query = new GetReportQuery
         {
             BankId = "Garanti",
-            Status = TransactionStatus.Success,
+            Status = TransactionStatusDto.Success,
             OrderReference = "ORDER_005",
             StartDate = DateTime.UtcNow.AddDays(-25),
             EndDate = DateTime.UtcNow

@@ -10,15 +10,17 @@ using Payment.Infrastructure.Repositories;
 
 namespace Payment.Tests.Handlers;
 
-public class SearchTransactionsHandlerTests
+public class SearchPaymentHandlerTests
 {
     private readonly Mock<ISearchService> _searchServiceMock;
-    private readonly SearchTransactionsHandler _handler;
+    private readonly Mock<ITimeZoneService> _timeZoneServiceMock;
+    private readonly SearchPaymentHandler _handler;
 
-    public SearchTransactionsHandlerTests()
+    public SearchPaymentHandlerTests()
     {
         _searchServiceMock = new Mock<ISearchService>();
-        _handler = new SearchTransactionsHandler(_searchServiceMock.Object);
+        _timeZoneServiceMock = new Mock<ITimeZoneService>();
+        _handler = new SearchPaymentHandler(_searchServiceMock.Object, _timeZoneServiceMock.Object);
     }
 
     [Fact]
@@ -29,6 +31,44 @@ public class SearchTransactionsHandlerTests
         {
             StartDate = DateTime.UtcNow.AddDays(-30),
             EndDate = DateTime.UtcNow,
+            Status = TransactionStatus.Success
+        };
+
+        var expectedTransactions = new List<TransactionReportDto>
+        {
+            new TransactionReportDto
+            {
+                TransactionId = Guid.NewGuid(),
+                TotalAmount = 100m,
+                NetAmount = 100m,
+                Status = TransactionStatus.Success,
+                TransactionDate = DateTime.UtcNow.AddDays(-5),
+                OrderReference = "dummy",
+                BankId = Guid.NewGuid().ToString(),
+                TransactionDetails = new List<TransactionDetailDto>(),
+            },
+        };
+
+        _searchServiceMock
+            .Setup(repo => repo.SearchAsync(query))
+            .ReturnsAsync(expectedTransactions);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        _searchServiceMock.Verify(repo => repo.SearchAsync(query), Times.Once);
+        result.Should().BeEquivalentTo(expectedTransactions);
+    }
+    
+    [Fact]
+    public async Task Handle_Should_Call_SearchAsync_And_Return_Transactions_NotUTC()
+    {
+        // Arrange
+        var query = new SearchPaymentQuery
+        {
+            StartDate = DateTime.Now.AddDays(-30),
+            EndDate = DateTime.Now,
             Status = TransactionStatus.Success
         };
 

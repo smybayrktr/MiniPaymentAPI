@@ -1,9 +1,9 @@
-﻿using Report.Contracts.Queries;
-using Report.Domain.Entities;
+﻿using Report.Contracts.DTOs;
+using Report.Contracts.Queries;
 
 namespace Report.Application.Interfaces;
 
 public interface IReportService
 {
-    Task<IEnumerable<Transaction>> GetReportAsync(GetReportQuery query);
+    Task<IEnumerable<TransactionReportDto>> GetReportAsync(GetReportQuery query);
 }

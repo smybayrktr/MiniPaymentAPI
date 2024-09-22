@@ -8,14 +8,19 @@ namespace Payment.Application.Handlers;
 public class PayTransactionHandler : IRequestHandler<PayTransactionCommand, Transaction>
 {
     private readonly IPaymentService _paymentService;
+    private readonly ITimeZoneService _timeZoneService;
 
-    public PayTransactionHandler(IPaymentService paymentService)
+    public PayTransactionHandler(IPaymentService paymentService, ITimeZoneService timeZoneService)
     {
         _paymentService = paymentService;
+        _timeZoneService = timeZoneService;
     }
 
     public async Task<Transaction> Handle(PayTransactionCommand request, CancellationToken cancellationToken)
     {
-        return await _paymentService.PayAsync(request);
+        var transaction = await _paymentService.PayAsync(request);
+        transaction.TransactionDate = _timeZoneService.ConvertUtcToLocalTime(transaction.TransactionDate);
+        
+        return transaction;
     }
 }

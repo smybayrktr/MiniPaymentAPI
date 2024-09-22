@@ -11,12 +11,14 @@ namespace Payment.Tests.Handlers;
 public class RefundTransactionHandlerTests
 {
     private readonly Mock<IPaymentService> _paymentServiceMock;
+    private readonly Mock<ITimeZoneService> _timeZoneServiceMock;
     private readonly RefundTransactionHandler _handler;
 
     public RefundTransactionHandlerTests()
     {
         _paymentServiceMock = new Mock<IPaymentService>();
-        _handler = new RefundTransactionHandler(_paymentServiceMock.Object);
+        _timeZoneServiceMock = new Mock<ITimeZoneService>();
+        _handler = new RefundTransactionHandler(_paymentServiceMock.Object, _timeZoneServiceMock.Object);
     }
 
     [Fact]

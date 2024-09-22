@@ -8,14 +8,19 @@ namespace Payment.Application.Handlers;
 public class CancelTransactionHandler : IRequestHandler<CancelTransactionCommand, Transaction>
 {
     private readonly IPaymentService _paymentService;
+    private readonly ITimeZoneService _timeZoneService;
 
-    public CancelTransactionHandler(IPaymentService paymentService)
+    public CancelTransactionHandler(IPaymentService paymentService, ITimeZoneService timeZoneService)
     {
         _paymentService = paymentService;
+        _timeZoneService = timeZoneService;
     }
 
     public async Task<Transaction> Handle(CancelTransactionCommand request, CancellationToken cancellationToken)
     {
-        return await _paymentService.CancelAsync(request);
+        var transaction = await _paymentService.CancelAsync(request);
+        transaction.TransactionDate = _timeZoneService.ConvertUtcToLocalTime(transaction.TransactionDate);
+
+        return transaction;
     }
 }

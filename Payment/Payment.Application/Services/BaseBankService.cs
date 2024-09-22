@@ -1,4 +1,5 @@
-﻿using Payment.Application.Interfaces;
+﻿using Payment.Application.Exceptions;
+using Payment.Application.Interfaces;
 using Payment.Contracts.Commands;
 using Payment.Domain.Entities;
 using Payment.Domain.Enums;
@@ -32,7 +33,7 @@ public abstract class BaseBankService : IBankService
         };
 
         await _transactionRepository.AddAsync(transaction);
-
+        
         var transactionDetail = new TransactionDetail
         {
             Id = Guid.NewGuid(),
@@ -43,24 +44,20 @@ public abstract class BaseBankService : IBankService
         };
 
         await _transactionDetailRepository.AddAsync(transactionDetail);
-
+        
         return transaction;
     }
 
-    public virtual async Task<Transaction> CancelAsync(Guid transactionId)
+    public virtual async Task<Transaction> CancelAsync(Transaction transaction)
     {
-        var transaction = await _transactionRepository.GetByIdAsync(transactionId);
-        if (transaction == null)
-            throw new Exception("Transaction not found");
-
         if (transaction.TransactionDate.Date != DateTime.UtcNow.Date)
-            throw new Exception("Cancel operation is only allowed on the same day");
+            throw new BusinessLogicException("Cancel operation is only allowed on the same day");
 
         transaction.NetAmount -= transaction.TotalAmount;
         transaction.Status = TransactionStatus.Success;
 
         await _transactionRepository.UpdateAsync(transaction);
-
+        
         var transactionDetail = new TransactionDetail
         {
             Id = Guid.NewGuid(),
@@ -75,20 +72,16 @@ public abstract class BaseBankService : IBankService
         return transaction;
     }
 
-    public virtual async Task<Transaction> RefundAsync(Guid transactionId)
+    public virtual async Task<Transaction> RefundAsync(Transaction transaction)
     {
-        var transaction = await _transactionRepository.GetByIdAsync(transactionId);
-        if (transaction == null)
-            throw new Exception("Transaction not found");
-
         if ((DateTime.UtcNow - transaction.TransactionDate).TotalDays < 1)
-            throw new Exception("Refund operation is allowed only after one day");
+            throw new BusinessLogicException("Refund operation is allowed only after one day");
 
         transaction.NetAmount -= transaction.TotalAmount;
         transaction.Status = TransactionStatus.Success;
 
         await _transactionRepository.UpdateAsync(transaction);
-
+        
         var transactionDetail = new TransactionDetail
         {
             Id = Guid.NewGuid(),

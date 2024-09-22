@@ -1,10 +1,10 @@
-﻿using Moq;
+﻿using System.Transactions;
+using Moq;
 using FluentAssertions;
 using Report.Application.Handlers;
 using Report.Application.Interfaces;
+using Report.Contracts.DTOs;
 using Report.Contracts.Queries;
-using Report.Domain.Entities;
-using Report.Domain.Enums;
 
 namespace Report.Tests.Handlers;
 
@@ -26,24 +26,67 @@ public class GetReportHandlerTests
         var query = new GetReportQuery
         {
             BankId = "Akbank",
-            Status = TransactionStatus.Success,
+            Status = TransactionStatusDto.Success,
             OrderReference = "ORDER_001",
             StartDate = DateTime.UtcNow.AddDays(-30),
             EndDate = DateTime.UtcNow
         };
 
-        var expectedTransactions = new List<Transaction>
+        var expectedTransactions = new List<TransactionReportDto>
         {
-            new Transaction
+            new TransactionReportDto
             {
-                Id = Guid.NewGuid(),
-                BankId = "Akbank",
-                TotalAmount = 1000m,
-                NetAmount = 900m,
-                Status = TransactionStatus.Success,
-                OrderReference = "ORDER_001",
-                TransactionDate = DateTime.UtcNow.AddDays(-10)
-            }
+                TransactionId = Guid.NewGuid(),
+                TotalAmount = 100m,
+                NetAmount = 100m,
+                Status = TransactionStatusDto.Success,
+                TransactionDate = DateTime.UtcNow.AddDays(-5),
+                OrderReference = "dummy",
+                BankId = Guid.NewGuid().ToString(),
+                TransactionDetails = new List<TransactionDetailDto>(),
+            },
+        };
+
+        _reportServiceMock.Setup(service => service.GetReportAsync(query))
+            .ReturnsAsync(expectedTransactions);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result.Should().BeEquivalentTo(expectedTransactions);
+
+        _reportServiceMock.Verify(service => service.GetReportAsync(query), Times.Once);
+    }
+    
+    [Fact]
+    public async Task Handle_ShouldReturnTransactions_WhenReportServiceReturnsData_NotUTC()
+    {
+        // Arrange
+        var query = new GetReportQuery
+        {
+            BankId = "Akbank",
+            Status = TransactionStatusDto.Success,
+            OrderReference = "ORDER_001",
+            StartDate = DateTime.Now.AddDays(-30),
+            EndDate = DateTime.Now
+        };
+
+        var expectedTransactions = new List<TransactionReportDto>
+        {
+            new TransactionReportDto
+            {
+                TransactionId = Guid.NewGuid(),
+                TotalAmount = 100m,
+                NetAmount = 100m,
+                Status = TransactionStatusDto.Success,
+                TransactionDate = DateTime.UtcNow.AddDays(-5),
+                OrderReference = "dummy",
+                BankId = Guid.NewGuid().ToString(),
+                TransactionDetails = new List<TransactionDetailDto>(),
+            },
         };
 
         _reportServiceMock.Setup(service => service.GetReportAsync(query))
@@ -67,7 +110,7 @@ public class GetReportHandlerTests
         var query = new GetReportQuery
         {
             BankId = "Garanti",
-            Status = TransactionStatus.Fail,
+            Status = TransactionStatusDto.Fail,
             OrderReference = "ORDER_002",
             StartDate = DateTime.UtcNow.AddDays(-15),
             EndDate = DateTime.UtcNow

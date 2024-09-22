@@ -35,22 +35,11 @@ public class PaymentController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<IActionResult> Pay([FromBody] PayTransactionDto request)
     {
-        if (request == null)
-        {
-            return BadRequest("Payment details are required.");
-        }
-
         var command = _mapper.Map<PayTransactionCommand>(request);
 
-        try
-        {
-            var transaction = await _mediator.Send(command);
-            return Ok(transaction);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"An error occurred while processing the payment: {ex.Message}");
-        }
+        var transaction = await _mediator.Send(command);
+
+        return Ok(transaction);
     }
 
     /// <summary>
@@ -67,30 +56,14 @@ public class PaymentController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<IActionResult> Cancel(Guid transactionId)
     {
-        if (transactionId == Guid.Empty)
-        {
-            return BadRequest("A valid transaction ID must be provided.");
-        }
-
         var command = new CancelTransactionCommand
         {
             TransactionId = transactionId
         };
 
-        try
-        {
-            var transaction = await _mediator.Send(command);
-            if (transaction == null)
-            {
-                return NotFound($"Transaction with ID {transactionId} not found.");
-            }
+        var transaction = await _mediator.Send(command);
 
-            return Ok(transaction);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"An error occurred while canceling the transaction: {ex.Message}");
-        }
+        return Ok(transaction);
     }
 
     /// <summary>
@@ -107,30 +80,14 @@ public class PaymentController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<IActionResult> Refund(Guid transactionId)
     {
-        if (transactionId == Guid.Empty)
-        {
-            return BadRequest("A valid transaction ID must be provided.");
-        }
-
         var command = new RefundTransactionCommand
         {
             TransactionId = transactionId
         };
 
-        try
-        {
-            var transaction = await _mediator.Send(command);
-            if (transaction == null)
-            {
-                return NotFound($"Transaction with ID {transactionId} not found.");
-            }
+        var transaction = await _mediator.Send(command);
 
-            return Ok(transaction);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"An error occurred while processing the refund: {ex.Message}");
-        }
+        return Ok(transaction);
     }
 
     /// <summary>
@@ -147,22 +104,10 @@ public class PaymentController : ControllerBase
     [ProducesResponseType(500)]
     public async Task<IActionResult> Search([FromQuery] SearchPaymentDto searchDto)
     {
-        if (searchDto == null)
-        {
-            return BadRequest("Search parameters are required.");
-        }
-
         var query = _mapper.Map<SearchPaymentQuery>(searchDto);
 
-        try
-        {
-            var transactions = await _mediator.Send(query);
-            return Ok(transactions);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"An error occurred while searching for transactions: {ex.Message}");
-        }
+        var transactions = await _mediator.Send(query);
+        
+        return Ok(transactions);
     }
 }
-

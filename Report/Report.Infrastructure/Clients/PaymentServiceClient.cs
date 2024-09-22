@@ -1,6 +1,6 @@
 ﻿using Report.Contracts.Queries;
-using Report.Domain.Entities;
 using System.Net.Http.Json;
+using Report.Contracts.DTOs;
 
 namespace Report.Infrastructure.Clients;
 
@@ -13,7 +13,7 @@ public class PaymentServiceClient : IPaymentServiceClient
         _httpClient = httpClient;
     }
 
-    public async Task<IEnumerable<Transaction>> SearchTransactionsAsync(GetReportQuery query)
+    public async Task<IEnumerable<TransactionReportDto>> SearchTransactionsAsync(GetReportQuery query)
     {
         var queryParams = new List<string>();
         if (!string.IsNullOrEmpty(query.BankId))
@@ -32,7 +32,7 @@ public class PaymentServiceClient : IPaymentServiceClient
         var response = await _httpClient.GetAsync($"/api/payment/search{queryString}");
         response.EnsureSuccessStatusCode();
 
-        var transactions = await response.Content.ReadFromJsonAsync<IEnumerable<Transaction>>();
+        var transactions = await response.Content.ReadFromJsonAsync<IEnumerable<TransactionReportDto>>();
         return transactions;
     }
 }

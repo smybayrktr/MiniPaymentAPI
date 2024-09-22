@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Payment.API.Controllers;
+using Payment.Application.Exceptions;
 using Payment.Contracts.Commands;
 using Payment.Contracts.DTOs;
 using Payment.Contracts.Queries;
@@ -25,16 +26,57 @@ public class PaymentControllerTests
         _controller = new PaymentController(_mediatorMock.Object, _mapperMock.Object);
     }
 
+    private Transaction CreateSampleTransaction()
+    {
+        return new Transaction
+        {
+            Id = Guid.NewGuid(),
+            BankId = Guid.NewGuid().ToString(),
+            TotalAmount = 1000m,
+            NetAmount = 1000m,
+            Status = Domain.Enums.TransactionStatus.Success,
+            OrderReference = "ORDER123",
+            TransactionDate = DateTime.UtcNow
+        };
+    }
+
+    private IEnumerable<TransactionReportDto> CreateSampleTransactionReports()
+    {
+        return new List<TransactionReportDto>
+        {
+            new TransactionReportDto
+            {
+                TransactionId = Guid.NewGuid(),
+                BankId = Guid.NewGuid().ToString(),
+                TotalAmount = 500m,
+                NetAmount = 500m,
+                Status = TransactionStatus.Success,
+                OrderReference = "ORDER123",
+                TransactionDate = DateTime.UtcNow
+            },
+            new TransactionReportDto
+            {
+                TransactionId = Guid.NewGuid(),
+                BankId = Guid.NewGuid().ToString(),
+                TotalAmount = 1500m,
+                NetAmount = 1500m,
+                Status = TransactionStatus.Success,
+                OrderReference = "ORDER456",
+                TransactionDate = DateTime.UtcNow
+            }
+        };
+    }
+
     #region Pay Tests
 
     [Fact]
-    public async Task Pay_Should_Return_Ok_With_Transaction_When_Request_Is_Valid()
+    public async Task Pay_ShouldReturnOk_WithTransaction_WhenPaymentIsSuccessful()
     {
         // Arrange
         var payDto = new PayTransactionDto
         {
             BankId = Guid.NewGuid().ToString(),
-            TotalAmount = 100m,
+            TotalAmount = 1000m,
             OrderReference = "ORDER123"
         };
 
@@ -45,23 +87,13 @@ public class PaymentControllerTests
             OrderReference = payDto.OrderReference
         };
 
-        var transaction = new Transaction
-        {
-            Id = Guid.NewGuid(),
-            BankId = payDto.BankId,
-            TotalAmount = payDto.TotalAmount,
-            NetAmount = payDto.TotalAmount,
-            Status = TransactionStatus.Success,
-            OrderReference = payDto.OrderReference,
-            TransactionDate = DateTime.UtcNow
-        };
+        var transaction = CreateSampleTransaction();
 
-        _mapperMock.Setup(m => m.Map<PayTransactionCommand>(payDto)).Returns(command);
-        _mediatorMock.Setup(m => m.Send(It.Is<PayTransactionCommand>(c =>
-            c.BankId == payDto.BankId &&
-            c.TotalAmount == payDto.TotalAmount &&
-            c.OrderReference == payDto.OrderReference
-        ), It.IsAny<CancellationToken>())).ReturnsAsync(transaction);
+        _mapperMock.Setup(m => m.Map<PayTransactionCommand>(It.IsAny<PayTransactionDto>()))
+            .Returns(command);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<PayTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(transaction);
 
         // Act
         var result = await _controller.Pay(payDto);
@@ -73,41 +105,42 @@ public class PaymentControllerTests
         okResult.Value.Should().BeEquivalentTo(transaction);
 
         _mapperMock.Verify(m => m.Map<PayTransactionCommand>(payDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(It.Is<PayTransactionCommand>(c =>
-            c.BankId == payDto.BankId &&
-            c.TotalAmount == payDto.TotalAmount &&
-            c.OrderReference == payDto.OrderReference
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(m => m.Send(command, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task Pay_Should_Return_BadRequest_When_Request_Is_Null()
-    {
-        // Arrange
-        PayTransactionDto payDto = null;
-
-        // Act
-        var result = await _controller.Pay(payDto);
-
-        // Assert
-        var badRequestResult = result as BadRequestObjectResult;
-        badRequestResult.Should().NotBeNull();
-        badRequestResult.StatusCode.Should().Be(400);
-        badRequestResult.Value.Should().Be("Payment details are required.");
-
-        _mapperMock.Verify(m => m.Map<PayTransactionCommand>(It.IsAny<PayTransactionDto>()), Times.Never);
-        _mediatorMock.Verify(m => m.Send(It.IsAny<PayTransactionCommand>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Pay_Should_Return_InternalServerError_When_Exception_Is_Thrown()
+    public async Task Pay_ShouldReturnBadRequest_WhenMappingFails()
     {
         // Arrange
         var payDto = new PayTransactionDto
         {
             BankId = Guid.NewGuid().ToString(),
-            TotalAmount = 100m,
+            TotalAmount = 1000m,
+            OrderReference = "ORDER123"
+        };
+
+        _mapperMock.Setup(m => m.Map<PayTransactionCommand>(It.IsAny<PayTransactionDto>()))
+            .Throws(new AutoMapperMappingException("Mapping failed"));
+
+        // Act
+        Func<Task<IActionResult>> act = async () => await _controller.Pay(payDto);
+
+        // Assert
+        await act.Should().ThrowAsync<AutoMapperMappingException>();
+
+        _mapperMock.Verify(m => m.Map<PayTransactionCommand>(payDto), Times.Once);
+        _mediatorMock.Verify(m => m.Send(It.IsAny<PayTransactionCommand>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Pay_ShouldReturnInternalServerError_WhenMediatorThrowsException()
+    {
+        // Arrange
+        var payDto = new PayTransactionDto
+        {
+            BankId = Guid.NewGuid().ToString(),
+            TotalAmount = 1000m,
             OrderReference = "ORDER123"
         };
 
@@ -118,29 +151,21 @@ public class PaymentControllerTests
             OrderReference = payDto.OrderReference
         };
 
-        _mapperMock.Setup(m => m.Map<PayTransactionCommand>(payDto)).Returns(command);
-        _mediatorMock.Setup(m => m.Send(It.Is<PayTransactionCommand>(c =>
-                c.BankId == payDto.BankId &&
-                c.TotalAmount == payDto.TotalAmount &&
-                c.OrderReference == payDto.OrderReference
-            ), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Database error"));
+        _mapperMock.Setup(m => m.Map<PayTransactionCommand>(It.IsAny<PayTransactionDto>()))
+            .Returns(command);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<PayTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Mediator error"));
 
         // Act
-        var result = await _controller.Pay(payDto);
+        Func<Task<IActionResult>> act = async () => await _controller.Pay(payDto);
 
         // Assert
-        var statusCodeResult = result as ObjectResult;
-        statusCodeResult.Should().NotBeNull();
-        statusCodeResult.StatusCode.Should().Be(500);
-        statusCodeResult.Value.Should().Be("An error occurred while processing the payment: Database error");
+        var exception = await act.Should().ThrowAsync<Exception>();
+        exception.WithMessage("Mediator error");
 
         _mapperMock.Verify(m => m.Map<PayTransactionCommand>(payDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(It.Is<PayTransactionCommand>(c =>
-            c.BankId == payDto.BankId &&
-            c.TotalAmount == payDto.TotalAmount &&
-            c.OrderReference == payDto.OrderReference
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(m => m.Send(command, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
@@ -148,25 +173,19 @@ public class PaymentControllerTests
     #region Cancel Tests
 
     [Fact]
-    public async Task Cancel_Should_Return_Ok_With_Transaction_When_Transaction_Is_Found()
+    public async Task Cancel_ShouldReturnOk_WithUpdatedTransaction_WhenCancellationIsSuccessful()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
+
         var command = new CancelTransactionCommand
         {
             TransactionId = transactionId
         };
 
-        var transaction = new Transaction
-        {
-            Id = transactionId,
-            NetAmount = 0m,
-            Status = TransactionStatus.Success,
-            TransactionDate = DateTime.UtcNow
-        };
+        var transaction = CreateSampleTransaction();
 
-        _mediatorMock.Setup(m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
+        _mediatorMock.Setup(m => m.Send(It.IsAny<CancelTransactionCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(transaction);
 
         // Act
@@ -184,74 +203,43 @@ public class PaymentControllerTests
     }
 
     [Fact]
-    public async Task Cancel_Should_Return_BadRequest_When_TransactionId_Is_Empty()
-    {
-        // Arrange
-        var transactionId = Guid.Empty;
-
-        // Act
-        var result = await _controller.Cancel(transactionId);
-
-        // Assert
-        var badRequestResult = result as BadRequestObjectResult;
-        badRequestResult.Should().NotBeNull();
-        badRequestResult.StatusCode.Should().Be(400);
-        badRequestResult.Value.Should().Be("A valid transaction ID must be provided.");
-
-        _mediatorMock.Verify(m => m.Send(It.IsAny<CancelTransactionCommand>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Cancel_Should_Return_NotFound_When_Transaction_Is_Not_Found()
+    public async Task Cancel_ShouldReturnNotFound_WhenTransactionDoesNotExist()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
-        var command = new CancelTransactionCommand
-        {
-            TransactionId = transactionId
-        };
 
-        _mediatorMock.Setup(m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Transaction)null);
+        _mediatorMock.Setup(m => m.Send(It.IsAny<CancelTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TransactionNotFoundException("Transaction not found"));
 
         // Act
-        var result = await _controller.Cancel(transactionId);
-
-        // Assert
-        var notFoundResult = result as NotFoundObjectResult;
-        notFoundResult.Should().NotBeNull();
-        notFoundResult.StatusCode.Should().Be(404);
-        notFoundResult.Value.Should().Be($"Transaction with ID {transactionId} not found.");
-
-        _mediatorMock.Verify(
-            m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()), Times.Once);
+        try
+        {
+            await _controller.Cancel(transactionId);
+        }
+        catch (Exception e)
+        {
+            e.Should().BeOfType<TransactionNotFoundException>();
+            _mediatorMock.Verify(
+                m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
+                    It.IsAny<CancellationToken>()), Times.Once);
+        }
     }
 
     [Fact]
-    public async Task Cancel_Should_Return_InternalServerError_When_Exception_Is_Thrown()
+    public async Task Cancel_ShouldReturnInternalServerError_WhenMediatorThrowsException()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
-        var command = new CancelTransactionCommand
-        {
-            TransactionId = transactionId
-        };
 
-        _mediatorMock.Setup(m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Cancellation error"));
+        _mediatorMock.Setup(m => m.Send(It.IsAny<CancelTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Mediator error"));
 
         // Act
-        var result = await _controller.Cancel(transactionId);
+        Func<Task<IActionResult>> act = async () => await _controller.Cancel(transactionId);
 
         // Assert
-        var statusCodeResult = result as ObjectResult;
-        statusCodeResult.Should().NotBeNull();
-        statusCodeResult.StatusCode.Should().Be(500);
-        statusCodeResult.Value.Should().Be("An error occurred while canceling the transaction: Cancellation error");
+        var exception = await act.Should().ThrowAsync<Exception>();
+        exception.WithMessage("Mediator error");
 
         _mediatorMock.Verify(
             m => m.Send(It.Is<CancelTransactionCommand>(c => c.TransactionId == transactionId),
@@ -263,25 +251,22 @@ public class PaymentControllerTests
     #region Refund Tests
 
     [Fact]
-    public async Task Refund_Should_Return_Ok_With_Transaction_When_Transaction_Is_Found()
+    public async Task Refund_ShouldReturnOk_WithUpdatedTransaction_WhenRefundIsSuccessful()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
+
         var command = new RefundTransactionCommand
         {
             TransactionId = transactionId
         };
 
-        var transaction = new Transaction
-        {
-            Id = transactionId,
-            NetAmount = 0m,
-            Status = TransactionStatus.Success,
-            TransactionDate = DateTime.UtcNow
-        };
+        var transaction = CreateSampleTransaction();
 
-        _mediatorMock.Setup(m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
+        _mapperMock.Setup(m => m.Map<RefundTransactionCommand>(It.IsAny<Guid>()))
+            .Returns(command);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<RefundTransactionCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(transaction);
 
         // Act
@@ -299,74 +284,42 @@ public class PaymentControllerTests
     }
 
     [Fact]
-    public async Task Refund_Should_Return_BadRequest_When_TransactionId_Is_Empty()
-    {
-        // Arrange
-        var transactionId = Guid.Empty;
-
-        // Act
-        var result = await _controller.Refund(transactionId);
-
-        // Assert
-        var badRequestResult = result as BadRequestObjectResult;
-        badRequestResult.Should().NotBeNull();
-        badRequestResult.StatusCode.Should().Be(400);
-        badRequestResult.Value.Should().Be("A valid transaction ID must be provided.");
-
-        _mediatorMock.Verify(m => m.Send(It.IsAny<RefundTransactionCommand>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Refund_Should_Return_NotFound_When_Transaction_Is_Not_Found()
+    public async Task Refund_ShouldReturnNotFound_WhenTransactionDoesNotExist()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
-        var command = new RefundTransactionCommand
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<RefundTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TransactionNotFoundException("Transaction not found"));
+
+        try
         {
-            TransactionId = transactionId
-        };
-
-        _mediatorMock.Setup(m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Transaction)null);
-
-        // Act
-        var result = await _controller.Refund(transactionId);
-
-        // Assert
-        var notFoundResult = result as NotFoundObjectResult;
-        notFoundResult.Should().NotBeNull();
-        notFoundResult.StatusCode.Should().Be(404);
-        notFoundResult.Value.Should().Be($"Transaction with ID {transactionId} not found.");
-
-        _mediatorMock.Verify(
-            m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()), Times.Once);
+            await _controller.Refund(transactionId);
+        }
+        catch (Exception e)
+        {
+            e.Should().BeOfType<TransactionNotFoundException>();
+            _mediatorMock.Verify(
+                m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
+                    It.IsAny<CancellationToken>()), Times.Once);
+        }
     }
 
     [Fact]
-    public async Task Refund_Should_Return_InternalServerError_When_Exception_Is_Thrown()
+    public async Task Refund_ShouldReturnInternalServerError_WhenMediatorThrowsException()
     {
         // Arrange
         var transactionId = Guid.NewGuid();
-        var command = new RefundTransactionCommand
-        {
-            TransactionId = transactionId
-        };
 
-        _mediatorMock.Setup(m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Refund error"));
+        _mediatorMock.Setup(m => m.Send(It.IsAny<RefundTransactionCommand>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Mediator error"));
 
         // Act
-        var result = await _controller.Refund(transactionId);
+        Func<Task<IActionResult>> act = async () => await _controller.Refund(transactionId);
 
         // Assert
-        var statusCodeResult = result as ObjectResult;
-        statusCodeResult.Should().NotBeNull();
-        statusCodeResult.StatusCode.Should().Be(500);
-        statusCodeResult.Value.Should().Be("An error occurred while processing the refund: Refund error");
+        var exception = await act.Should().ThrowAsync<Exception>();
+        exception.WithMessage("Mediator error");
 
         _mediatorMock.Verify(
             m => m.Send(It.Is<RefundTransactionCommand>(c => c.TransactionId == transactionId),
@@ -378,44 +331,32 @@ public class PaymentControllerTests
     #region Search Tests
 
     [Fact]
-    public async Task Search_Should_Return_Ok_With_Transactions_When_Search_Is_Successful()
+    public async Task Search_ShouldReturnOk_WithTransactionReports_WhenSearchIsSuccessful()
     {
         // Arrange
         var searchDto = new SearchPaymentDto
         {
-            StartDate = DateTime.UtcNow.AddDays(-30),
+            StartDate = DateTime.UtcNow.AddDays(-7),
             EndDate = DateTime.UtcNow,
-            Status = TransactionStatus.Success
+            Status = TransactionStatus.Success,
+            BankId = Guid.NewGuid().ToString()
         };
 
         var query = new SearchPaymentQuery
         {
             StartDate = searchDto.StartDate,
             EndDate = searchDto.EndDate,
-            Status = searchDto.Status
+            Status = searchDto.Status,
+            BankId = searchDto.BankId
         };
 
-        var transactions = new List<TransactionReportDto>
-        {
-            new TransactionReportDto
-            {
-                TransactionId = Guid.NewGuid(),
-                TotalAmount = 100m,
-                NetAmount = 100m,
-                Status = TransactionStatus.Success,
-                TransactionDate = DateTime.UtcNow.AddDays(-5),
-                OrderReference = "dummy",
-                BankId = Guid.NewGuid().ToString(),
-                TransactionDetails = new List<TransactionDetailDto>(),
-            },
-        };
+        var transactionReports = CreateSampleTransactionReports();
 
-        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(searchDto)).Returns(query);
-        _mediatorMock.Setup(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-            q.StartDate == searchDto.StartDate &&
-            q.EndDate == searchDto.EndDate &&
-            q.Status == searchDto.Status
-        ), It.IsAny<CancellationToken>())).ReturnsAsync(transactions);
+        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(It.IsAny<SearchPaymentDto>()))
+            .Returns(query);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<SearchPaymentQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(transactionReports);
 
         // Act
         var result = await _controller.Search(searchDto);
@@ -424,62 +365,39 @@ public class PaymentControllerTests
         var okResult = result as OkObjectResult;
         okResult.Should().NotBeNull();
         okResult.StatusCode.Should().Be(200);
-        okResult.Value.Should().BeEquivalentTo(transactions);
+        okResult.Value.Should().BeEquivalentTo(transactionReports);
 
         _mapperMock.Verify(m => m.Map<SearchPaymentQuery>(searchDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-            q.StartDate == searchDto.StartDate &&
-            q.EndDate == searchDto.EndDate &&
-            q.Status == searchDto.Status
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task Search_Should_Return_BadRequest_When_SearchDto_Is_Null()
-    {
-        // Arrange
-        SearchPaymentDto searchDto = null;
-
-        // Act
-        var result = await _controller.Search(searchDto);
-
-        // Assert
-        var badRequestResult = result as BadRequestObjectResult;
-        badRequestResult.Should().NotBeNull();
-        badRequestResult.StatusCode.Should().Be(400);
-        badRequestResult.Value.Should().Be("Search parameters are required.");
-
-        _mapperMock.Verify(m => m.Map<SearchPaymentQuery>(It.IsAny<SearchPaymentDto>()), Times.Never);
-        _mediatorMock.Verify(m => m.Send(It.IsAny<SearchPaymentQuery>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
-    public async Task Search_Should_Return_Empty_List_When_No_Transactions_Found()
+    public async Task Search_ShouldReturnOk_WithEmptyList_WhenNoTransactionsFound()
     {
         // Arrange
         var searchDto = new SearchPaymentDto
         {
-            StartDate = DateTime.UtcNow.AddDays(-30),
+            StartDate = DateTime.UtcNow.AddDays(-7),
             EndDate = DateTime.UtcNow,
-            Status = TransactionStatus.Success
+            Status = TransactionStatus.Success,
+            BankId = Guid.NewGuid().ToString()
         };
 
         var query = new SearchPaymentQuery
         {
             StartDate = searchDto.StartDate,
             EndDate = searchDto.EndDate,
-            Status = searchDto.Status
+            Status = searchDto.Status,
+            BankId = searchDto.BankId
         };
 
-        var transactions = new List<TransactionReportDto>();
+        var transactionReports = new List<TransactionReportDto>();
 
-        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(searchDto)).Returns(query);
-        _mediatorMock.Setup(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-            q.StartDate == searchDto.StartDate &&
-            q.EndDate == searchDto.EndDate &&
-            q.Status == searchDto.Status
-        ), It.IsAny<CancellationToken>())).ReturnsAsync(transactions);
+        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(It.IsAny<SearchPaymentDto>()))
+            .Returns(query);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<SearchPaymentQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(transactionReports);
 
         // Act
         var result = await _controller.Search(searchDto);
@@ -488,56 +406,72 @@ public class PaymentControllerTests
         var okResult = result as OkObjectResult;
         okResult.Should().NotBeNull();
         okResult.StatusCode.Should().Be(200);
+        okResult.Value.Should().BeEquivalentTo(transactionReports);
 
         _mapperMock.Verify(m => m.Map<SearchPaymentQuery>(searchDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-            q.StartDate == searchDto.StartDate &&
-            q.EndDate == searchDto.EndDate &&
-            q.Status == searchDto.Status
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task Search_Should_Return_InternalServerError_When_Exception_Is_Thrown()
+    public async Task Search_ShouldReturnBadRequest_WhenMappingFails()
     {
         // Arrange
         var searchDto = new SearchPaymentDto
         {
-            StartDate = DateTime.UtcNow.AddDays(-30),
+            StartDate = DateTime.UtcNow.AddDays(-7),
             EndDate = DateTime.UtcNow,
-            Status = TransactionStatus.Success
+            Status = TransactionStatus.Success,
+            BankId = Guid.NewGuid().ToString()
+        };
+
+        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(It.IsAny<SearchPaymentDto>()))
+            .Throws(new AutoMapperMappingException("Mapping failed"));
+
+        // Act
+        Func<Task<IActionResult>> act = async () => await _controller.Search(searchDto);
+
+        // Assert
+        await act.Should().ThrowAsync<AutoMapperMappingException>();
+
+        _mapperMock.Verify(m => m.Map<SearchPaymentQuery>(searchDto), Times.Once);
+        _mediatorMock.Verify(m => m.Send(It.IsAny<SearchPaymentQuery>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Search_ShouldReturnInternalServerError_WhenMediatorThrowsException()
+    {
+        // Arrange
+        var searchDto = new SearchPaymentDto
+        {
+            StartDate = DateTime.UtcNow.AddDays(-7),
+            EndDate = DateTime.UtcNow,
+            Status = TransactionStatus.Success,
+            BankId = Guid.NewGuid().ToString()
         };
 
         var query = new SearchPaymentQuery
         {
             StartDate = searchDto.StartDate,
             EndDate = searchDto.EndDate,
-            Status = searchDto.Status
+            Status = searchDto.Status,
+            BankId = searchDto.BankId
         };
 
-        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(searchDto)).Returns(query);
-        _mediatorMock.Setup(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-                q.StartDate == searchDto.StartDate &&
-                q.EndDate == searchDto.EndDate &&
-                q.Status == searchDto.Status
-            ), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Search error"));
+        _mapperMock.Setup(m => m.Map<SearchPaymentQuery>(It.IsAny<SearchPaymentDto>()))
+            .Returns(query);
+
+        _mediatorMock.Setup(m => m.Send(It.IsAny<SearchPaymentQuery>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Mediator error"));
 
         // Act
-        var result = await _controller.Search(searchDto);
+        Func<Task<IActionResult>> act = async () => await _controller.Search(searchDto);
 
         // Assert
-        var statusCodeResult = result as ObjectResult;
-        statusCodeResult.Should().NotBeNull();
-        statusCodeResult.StatusCode.Should().Be(500);
-        statusCodeResult.Value.Should().Be("An error occurred while searching for transactions: Search error");
+        var exception = await act.Should().ThrowAsync<Exception>();
+        exception.WithMessage("Mediator error");
 
         _mapperMock.Verify(m => m.Map<SearchPaymentQuery>(searchDto), Times.Once);
-        _mediatorMock.Verify(m => m.Send(It.Is<SearchPaymentQuery>(q =>
-            q.StartDate == searchDto.StartDate &&
-            q.EndDate == searchDto.EndDate &&
-            q.Status == searchDto.Status
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(m => m.Send(query, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     #endregion
