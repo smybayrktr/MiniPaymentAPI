@@ -187,7 +187,7 @@ robustness.
 2. **Access APIs:**
     - **Payment API:** `https://localhost:5001/api/payment`
     - **Report API:** `https://localhost:5002/api/report`
-    - **API Gateway:** `https://localhost:5000/api`
+    - **API Gateway:** `https://localhost:5000/`
 
 ### Running the Application With Docker Compose
 
@@ -210,4 +210,4 @@ that all dependencies are correctly orchestrated, simplifying deployment and sca
 3. **Access APIs:**
     - **Payment API:** `https://localhost:5001/api/payment`
     - **Report API:** `https://localhost:5002/api/report`
-    - **API Gateway:** `https://localhost:5000/api`
+    - **API Gateway:** `https://localhost:5000/`
