@@ -141,8 +141,8 @@ robustness.
 
 1. **Clone the Repository:**
     ```bash
-    git clone https://github.com/smybayrktr/mini-payment-api.git
-    cd mini-payment-api
+    git clone https://github.com/smybayrktr/MiniPaymentAPI.git
+    cd MiniPaymentAPI
     ```
 
 2. **Navigate to Each Project and Restore Dependencies:**
