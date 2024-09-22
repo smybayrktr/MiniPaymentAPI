@@ -1,6 +1,7 @@
 ﻿using Moq;
 using Payment.Application.Services;
 using FluentAssertions;
+using Payment.Application.Exceptions;
 using Payment.Infrastructure.Repositories;
 
 namespace Payment.Tests.Services;
@@ -64,6 +65,6 @@ public class BankFactoryTests
         Action act = () => _bankFactory.GetBankService(invalidBankId);
 
         // Assert
-        act.Should().Throw<ArgumentException>().WithMessage("Invalid Bank Id");
+        act.Should().Throw<BankNotFoundException>().WithMessage("Invalid Bank Id");
     }
 }
